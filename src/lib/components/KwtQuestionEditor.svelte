@@ -2,13 +2,12 @@
     /**
      * @fileoverview Reusable KWT question card editor.
      * Used by both /review (post-OCR) and /create/manual.
-     * The parent owns the question data; this component mutates it directly
-     * via a $bindable prop.
      */
 
     import {t} from '$lib/i18n.svelte.js';
     import type {ParsedKWTQuestion} from '$lib/types.js';
     import {Plus, WarningCircle, XSquare} from 'phosphor-svelte';
+    import {CANONICAL_GAP} from '$lib/constants.js';
 
     interface Props {
         question: ParsedKWTQuestion;
@@ -21,7 +20,6 @@
 
     const GAP = '______';
 
-    /** Local inputs for the "add answer" rows. */
     let newAltAnswer = $state('');
     let newWrongAnswer = $state('');
 
@@ -33,6 +31,41 @@
     function onKeywordInput(e: Event) {
         const raw = (e.currentTarget as HTMLInputElement).value;
         question.keyword = raw.toUpperCase().replace(/[^A-Z]/g, '');
+    }
+
+    /**
+     * Normalises the sentence2 textarea value on every keystroke:
+     *  - Any run of one or more underscores is replaced with the canonical
+     *    six-underscore gap marker `______`.
+     *  - Cursor position is preserved so typing feels natural.
+     *
+     * This means the user can simply type a single `_` and it immediately
+     * becomes the gap — they don't have to count characters.
+     *
+     * @param e - Native input event from the sentence2 textarea.
+     */
+    function onGapInput(e: Event) {
+        const el = e.currentTarget as HTMLTextAreaElement;
+        const raw = el.value;
+
+        // Count canonical gaps BEFORE the cursor to restore position correctly.
+        const before = raw.slice(0, el.selectionStart ?? 0);
+        const normalised = raw.replace(/_+/g, GAP);
+
+        if (normalised === raw) {
+            // Nothing changed — avoid unnecessary value reassignment.
+            question.sentence2WithGap = raw;
+            return;
+        }
+
+        question.sentence2WithGap = normalised;
+
+        // Restore cursor: count how many gaps appear before the old cursor and
+        // place the caret at the end of the last affected gap.
+        const normBefore = before.replace(/_+/g, GAP);
+        requestAnimationFrame(() => {
+            el.selectionStart = el.selectionEnd = normBefore.length;
+        });
     }
 
     /**
@@ -50,17 +83,13 @@
         });
     }
 
-    /**
-     * Retrieves the sentence2 textarea by index and delegates to {@link insertGap}.
-     */
+    /** Retrieves the sentence2 textarea by index and delegates to {@link insertGap}. */
     function handleInsertGap() {
         const el = document.getElementById(`s2-${index}`);
         if (el instanceof HTMLTextAreaElement) insertGap(el);
     }
 
-    /**
-     * Appends a trimmed non-empty string to the alternative answers list.
-     */
+    /** Appends a trimmed non-empty string to the alternative answers list. */
     function addAltAnswer() {
         const val = newAltAnswer.trim();
         if (val) {
@@ -69,9 +98,7 @@
         }
     }
 
-    /**
-     * Appends a trimmed non-empty string to the wrong answers list.
-     */
+    /** Appends a trimmed non-empty string to the wrong answers list. */
     function addWrongAnswer() {
         const val = newWrongAnswer.trim();
         if (val) {
@@ -84,7 +111,7 @@
      * Handles Enter key in the "add answer" inputs.
      *
      * @param e - Keyboard event.
-     * @param handler - The add function to call.
+     * @param handler - The add function to call on Enter.
      */
     function onAnswerKeydown(e: KeyboardEvent, handler: () => void) {
         if (e.key === 'Enter') {
@@ -132,19 +159,24 @@
             placeholder={t('review.keywordph')}
     />
 
-    <!-- Sentence 2 with gap -->
-    <label class="field-label" for="s2-{index}">{t('review.sentence2')}</label>
+    <!-- Sentence 2 — oninput normalises any _+ run to the canonical gap -->
+    <label class="field-label" for="s2-{index}">
+        {t('review.sentence2')}
+        <span class="gap-hint">— wpisz <code>_</code> żeby wstawić lukę</span>
+    </label>
     <div class="s2-wrap">
     <textarea
             id="s2-{index}"
-            class="text-input"
+            class="text-input gap-textarea"
             rows="2"
-            bind:value={question.sentence2WithGap}
+            value={question.sentence2WithGap}
+            oninput={onGapInput}
             placeholder={t('review.sentence2ph')}
     ></textarea>
         <button
                 type="button"
                 class="btn-ghost insert-gap-btn"
+                class:hidden={question.sentence2WithGap.includes(CANONICAL_GAP)}
                 onclick={handleInsertGap}
                 title="Wstaw ______ w miejscu kursora"
         >+ ______
@@ -289,6 +321,29 @@
         resize: none;
     }
 
+    /* ── Sentence 2 label hint ────────────────────────────────────────── */
+    .gap-hint {
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-normal);
+        color: var(--color-text-muted);
+        text-transform: none;
+        letter-spacing: 0;
+        margin-left: var(--space-2);
+    }
+
+    .gap-hint code {
+        font-family: var(--font-mono), monospace;
+        background: var(--color-neutral-200);
+        padding: 0 3px;
+        border-radius: 3px;
+    }
+
+    /* ── Sentence 2 textarea — renders ______ as a continuous underline ─ */
+    .gap-textarea {
+        font-family: var(--font-mono), monospace;
+        letter-spacing: -0.03em; /* closes spacing between underscores */
+    }
+
     .s2-wrap {
         display: flex;
         flex-direction: column;
@@ -405,5 +460,10 @@
         font-size: var(--font-size-xs);
         white-space: nowrap;
         flex-shrink: 0;
+    }
+
+    .insert-gap-btn.hidden {
+        visibility: hidden;
+        pointer-events: none;
     }
 </style>

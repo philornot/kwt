@@ -2,16 +2,28 @@
  * @fileoverview KWT-tuned heuristic parser for OCR output.
  *
  * Handles both simple numbering ("1.") and compound numbering ("9.1.")
- * as used in Polish matura exam sheets. Sentence2 continuation lines
- * (text on the line immediately after the gap line) are correctly joined.
+ * as used in Polish matura exam sheets.
+ *
+ * Key insight: the KWT block structure is deterministic regardless of
+ * whether the gap marker survived OCR:
+ *
+ *   9.1. <sentence1 — may span multiple lines>
+ *        KEYWORD
+ *        <sentence2 — may span multiple lines, may or may not contain gap>
+ *
+ * We split on the keyword line, not on the gap line.  If a gap marker
+ * exists in sentence2 we normalise it; if it doesn't (Tesseract skipped
+ * the physical underline), we insert a canonical gap at the first
+ * plausible break point so the editor shows something the user can fix.
  */
 
 import type {ParsedKWTQuestion} from '../types.js';
+import { CANONICAL_GAP } from '../constants.js';
 
 /**
- * Matches the start of a numbered exercise in both formats:
- *   "1. text"    — simple numbering
- *   "9.1. text"  — compound matura-style numbering
+ * Matches numbered exercise starts in both formats:
+ *   "1. text"   — simple
+ *   "9.1. text" — compound matura-style
  */
 const QUESTION_START_RE = /^\s*(\d+(?:[.]\d+)*[.)]\s?)\s*(.*)/;
 
@@ -19,15 +31,45 @@ const QUESTION_START_RE = /^\s*(\d+(?:[.]\d+)*[.)]\s?)\s*(.*)/;
 const KEYWORD_RE = /^[A-Z]{2,20}$/;
 
 /**
- * Any visual representation of a gap:
+ * Visual gap representations produced by scanners / Tesseract:
  *  - 3+ underscores
  *  - repeated em/en dashes
- *  - 5+ dots used as blanks
+ *  - 4+ regular hyphens (Tesseract artefact)
+ *  - 5+ dots
  */
 const GAP_RE = /_{3,}|—{2,}|-{4,}|\.{5,}/g;
 
-/** Canonical gap string stored in the database and shown in the UI. */
-const CANONICAL_GAP = '______';
+// ---------------------------------------------------------------------------
+// OCR post-processing
+// ---------------------------------------------------------------------------
+
+/**
+ * Common single-character substitution errors produced by Tesseract
+ * when scanning serif fonts.
+ *
+ * `|` → `I` is applied only when the pipe stands alone as a word
+ * (surrounded by whitespace or at line boundaries) so we never corrupt
+ * legitimate pipe characters in other contexts.
+ */
+const CHAR_FIXES: Array<[RegExp, string]> = [[/(?<!\w)\|(?!\w)/g, 'I'],];
+
+/**
+ * Cleans up common Tesseract character-recognition errors in raw OCR text.
+ *
+ * @param text - Raw string from Tesseract or pdf-parse.
+ * @returns Cleaned string with known substitution errors corrected.
+ */
+function fixOcrArtefacts(text: string): string {
+    let result = text;
+    for (const [pattern, replacement] of CHAR_FIXES) {
+        result = result.replace(pattern, replacement);
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Parses raw OCR text into KWT question drafts.
@@ -36,7 +78,9 @@ const CANONICAL_GAP = '______';
  * @returns Array of partially-filled {@link ParsedKWTQuestion} objects.
  */
 export function parseQuestions(rawText: string): ParsedKWTQuestion[] {
-    const lines = rawText
+    const cleaned = fixOcrArtefacts(rawText);
+
+    const lines = cleaned
         .split('\n')
         .map((l) => l.trim())
         .filter((l) => l.length > 0);
@@ -76,15 +120,16 @@ function splitIntoBlocks(lines: string[]): string[][] {
 /**
  * Converts one block of lines into a {@link ParsedKWTQuestion}.
  *
- * Strategy:
- *  1. Strip the leading question number from the first line.
- *  2. Scan lines to find the keyword (all-caps single word) and the gap line.
- *  3. Lines before the gap (excluding the keyword) form sentence1.
- *  4. The gap line plus any immediately following non-keyword, non-question
- *     lines form sentence2. This handles the common matura layout where
- *     sentence2 wraps onto a second line, e.g.:
- *       "I wish I ______ so that I wouldn't"
- *       "have failed my exams."
+ * The split strategy is based on the keyword line, not the gap line:
+ *
+ *  - Lines BEFORE the keyword → sentence1 (joined with spaces).
+ *  - Lines AFTER the keyword  → sentence2 (joined with spaces).
+ *
+ * Within sentence2 we then look for a gap marker and normalise it to
+ * `______`.  If no gap marker is found (Tesseract treated the physical
+ * underline as whitespace and dropped it), we insert `______` at the
+ * first sentence boundary — either just before a word that starts a new
+ * clause, or at the end — so the editor always has a gap to show.
  *
  * @param block - Lines belonging to one numbered question.
  * @returns Parsed question draft with empty answer arrays.
@@ -95,54 +140,80 @@ function parseBlock(block: string[]): ParsedKWTQuestion {
 
     const allLines = [afterNumber, ...block.slice(1)].filter((l) => l.length > 0);
 
+    // Find the index of the keyword line.
+    const kwIdx = allLines.findIndex((l) => KEYWORD_RE.test(l));
+
     let keyword = '';
-    let gapLineIdx = -1;
-    const s1Parts: string[] = [];
+    let s1Lines: string[];
+    let s2Lines: string[];
 
-    // ── First pass: find keyword and gap line ──────────────────────────
-    for (let i = 0; i < allLines.length; i++) {
-        const line = allLines[i];
-
-        if (!keyword && KEYWORD_RE.test(line)) {
-            keyword = line.trim();
-            continue;
-        }
-
-        if (gapLineIdx === -1 && GAP_RE.test(line)) {
-            gapLineIdx = i;
-            continue;
-        }
-
-        // Accumulate sentence1 only from lines before the gap is found.
-        if (gapLineIdx === -1) {
-            s1Parts.push(line);
-        }
+    if (kwIdx === -1) {
+        // No keyword found — put everything in sentence1, leave sentence2 blank.
+        keyword = '';
+        s1Lines = allLines;
+        s2Lines = [];
+    } else {
+        keyword = allLines[kwIdx];
+        s1Lines = allLines.slice(0, kwIdx);
+        s2Lines = allLines.slice(kwIdx + 1);
     }
 
-    // ── Build sentence2: gap line + continuation lines ─────────────────
-    const s2Parts: string[] = [];
+    const sentence1 = s1Lines.join(' ').trim();
 
-    if (gapLineIdx !== -1) {
-        // Normalise the gap on the gap line itself.
-        s2Parts.push(allLines[gapLineIdx].replace(GAP_RE, CANONICAL_GAP).trim());
+    // Build sentence2 and normalise gap markers.
+    const rawS2 = s2Lines.join(' ').trim();
+    const hasGap = GAP_RE.test(rawS2);
 
-        // Collect continuation lines that come after the gap line.
-        // Stop if we hit another keyword or another question start.
-        for (let i = gapLineIdx + 1; i < allLines.length; i++) {
-            const line = allLines[i];
-            if (KEYWORD_RE.test(line)) break; // next keyword
-            if (QUESTION_START_RE.test(line)) break; // next question
-            s2Parts.push(line.trim());
-        }
+    let sentence2WithGap: string;
+
+    if (hasGap) {
+        // Normalise all gap representations to the canonical marker.
+        sentence2WithGap = rawS2.replace(GAP_RE, CANONICAL_GAP).trim();
+    } else if (rawS2.length > 0) {
+        // Tesseract dropped the physical underline entirely.
+        // Insert the gap at the most natural break point so the user has
+        // something to work with in the editor.
+        sentence2WithGap = insertFallbackGap(rawS2);
+    } else {
+        sentence2WithGap = '';
     }
 
     return {
-        sentence1: s1Parts.join(' ').trim(),
-        sentence2WithGap: s2Parts.join(' ').trim(),
+        sentence1,
+        sentence2WithGap,
         keyword,
         correctAnswer: null,
         alternativeAnswers: [],
         exampleWrongAnswers: [],
         maxWords: 5,
     };
+}
+
+/**
+ * Inserts a canonical gap into a sentence2 string that contains no gap marker.
+ *
+ * Heuristic: find the longest run of whitespace-separated words that
+ * looks like a "stem" (the part before the blank) by searching for a
+ * sentence-internal boundary such as a comma, dash, or a word that
+ * immediately follows an auxiliary verb pattern.  Falls back to inserting
+ * the gap after the first word cluster (up to 4 words) so there is always
+ * visible content on both sides of the gap.
+ *
+ * @param s - Raw sentence2 string with no gap marker.
+ * @returns Sentence2 string with `______` inserted.
+ */
+function insertFallbackGap(s: string): string {
+    // Try to split at a sentence-internal dash or comma which often marks
+    // the boundary between the stem and the gap in matura sentences.
+    const dashMatch = s.match(/^(.+?[,–—])\s+(.+)$/);
+    if (dashMatch) {
+        return `${dashMatch[1].trim()} ${CANONICAL_GAP} ${dashMatch[2].trim()}`.trim();
+    }
+
+    // Fall back: insert after the first 3–4 words.
+    const words = s.split(/\s+/);
+    const pivot = Math.min(4, Math.max(1, Math.floor(words.length / 2)));
+    return [words.slice(0, pivot).join(' '), CANONICAL_GAP, words.slice(pivot).join(' '),]
+        .filter(Boolean)
+        .join(' ');
 }

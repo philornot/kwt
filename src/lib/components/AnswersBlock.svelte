@@ -5,23 +5,26 @@
      * Renders a labelled section with:
      *   - a list of removable answer chips
      *   - a single-input row for adding answers one by one
-     *   - a collapsible import panel for bulk-pasting semicolon-delimited lists
+     *
+     * Bulk import is handled transparently: when the user pastes text the
+     * input is analysed by {@link smartSplit}. If a multi-answer pattern is
+     * detected (semicolons, pipes, numbered lists, plain newlines, …) all
+     * answers are added as chips at once. Single-answer pastes fall through
+     * to the normal input behaviour.
      */
 
     import {PlusIcon, XSquare} from 'phosphor-svelte';
-    import {parseAnswerList} from '$lib/parseAnswerList.js';
+    import {smartSplit} from '$lib/smartSplit.js';
 
     interface Props {
         /** The answer array to display and mutate (bound by reference). */
         answers: string[];
         /** Section label shown above the chips. */
         label: string;
-        /** Identifies this block; used for the import panel toggle ('alt' | 'wrong'). */
+        /** Identifies this block ('alt' | 'wrong'). */
         variant: 'alt' | 'wrong';
         /** Placeholder text for the single-add input. */
         addPlaceholder: string;
-        /** Placeholder text for the bulk-import textarea. */
-        importPlaceholder: string;
         /** Colour theme for chips: 'ok' = green, 'err' = red. */
         chipVariant: 'ok' | 'err';
         /** Called whenever the answers array is mutated. */
@@ -33,14 +36,11 @@
         label,
         variant,
         addPlaceholder,
-        importPlaceholder,
         chipVariant,
         onTouch,
     }: Props = $props();
 
     let newAnswer = $state('');
-    let isImportOpen = $state(false);
-    let importText = $state('');
 
     /** Appends a trimmed non-empty string to the answers array. */
     function addAnswer(): void {
@@ -64,63 +64,26 @@
     }
 
     /**
-     * Parses the import textarea and appends all found answers, then closes
-     * the panel.
+     * Intercepts paste events. When {@link smartSplit} detects a multi-answer
+     * pattern the event is cancelled and all answers are added as chips at
+     * once. Single-answer pastes are passed through unchanged.
+     *
+     * @param e - ClipboardEvent from the input element.
      */
-    function applyImport(): void {
-        const parsed = parseAnswerList(importText);
-        if (!parsed.length) return;
-        answers.push(...parsed);
-        importText = '';
-        isImportOpen = false;
-        onTouch?.();
-    }
+    function onPaste(e: ClipboardEvent): void {
+        const text = e.clipboardData?.getData('text') ?? '';
+        const parts = smartSplit(text);
+        if (!parts) return; // single answer — let the browser handle it
 
-    /** Toggles the import panel, resetting textarea on open. */
-    function toggleImport(): void {
-        isImportOpen = !isImportOpen;
-        if (isImportOpen) importText = '';
+        e.preventDefault();
+        answers.push(...parts);
+        newAnswer = '';
+        onTouch?.();
     }
 </script>
 
 <div class="answers-block">
-    <div class="block-header">
-        <span class="field-label">{label}</span>
-        <button
-                type="button"
-                class="btn-ghost import-toggle-btn"
-                class:import-toggle-active={isImportOpen}
-                onclick={toggleImport}
-                title="Importuj listę odpowiedzi z tekstu"
-        >
-            {isImportOpen ? '✕ Anuluj' : '↓ Importuj'}
-        </button>
-    </div>
-
-    {#if isImportOpen}
-        <div class="import-panel">
-            <p class="import-hint">
-                Wklej tekst ze średnikami. Łamanie wierszy jest ignorowane —
-                <code>had lost\ncontact with</code> staje się jedną odpowiedzią.
-            </p>
-            <textarea
-                    class="text-input import-textarea"
-                    bind:value={importText}
-                    rows="3"
-                    placeholder={importPlaceholder}
-            ></textarea>
-            <div class="import-actions">
-                <button
-                        type="button"
-                        class="btn-primary import-apply-btn"
-                        onclick={applyImport}
-                        disabled={!importText.trim()}
-                >
-                    Importuj
-                </button>
-            </div>
-        </div>
-    {/if}
+    <span class="field-label">{label}</span>
 
     {#if answers.length > 0}
         <div class="chip-list">
@@ -147,6 +110,7 @@
                 bind:value={newAnswer}
                 placeholder={addPlaceholder}
                 onkeydown={onKeydown}
+                onpaste={onPaste}
                 onblur={() => onTouch?.()}
         />
         <button type="button" class="btn-ghost add-chip-btn" onclick={addAnswer}>
@@ -166,70 +130,6 @@
         border-radius: var(--radius-md);
     }
 
-    .block-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--space-2);
-    }
-
-    .block-header .field-label {
-        margin-bottom: 0;
-    }
-
-    .import-toggle-btn {
-        padding: var(--space-1) var(--space-2);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        flex-shrink: 0;
-    }
-
-    .import-toggle-active {
-        background: var(--color-primary-light);
-        border-color: var(--color-primary);
-    }
-
-    /* ── Import panel ─────────────────────────────────────────────────── */
-    .import-panel {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-2);
-        padding: var(--space-3);
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-    }
-
-    .import-hint {
-        font-size: var(--font-size-xs);
-        color: var(--color-text-muted);
-        line-height: var(--line-height-snug);
-    }
-
-    .import-hint code {
-        font-family: var(--font-mono), monospace;
-        background: var(--color-neutral-200);
-        padding: 0 3px;
-        border-radius: 3px;
-    }
-
-    .import-textarea {
-        font-size: var(--font-size-sm);
-        resize: vertical;
-        min-height: 64px;
-    }
-
-    .import-actions {
-        display: flex;
-        gap: var(--space-2);
-    }
-
-    .import-apply-btn {
-        padding: var(--space-1) var(--space-3);
-        font-size: var(--font-size-xs);
-    }
-
-    /* ── Chips ────────────────────────────────────────────────────────── */
     .chip-list {
         display: flex;
         flex-wrap: wrap;
@@ -276,7 +176,6 @@
         transform: none;
     }
 
-    /* ── Add row ──────────────────────────────────────────────────────── */
     .add-row {
         display: flex;
         gap: var(--space-2);

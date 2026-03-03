@@ -115,7 +115,11 @@
      */
     function applyWordRange(raw: string): void {
         const val = raw.trim();
-        if (!val) { question.minWords = 0; question.maxWords = 0; return; }
+        if (!val) {
+            question.minWords = 0;
+            question.maxWords = 0;
+            return;
+        }
 
         const rangeMatch = val.match(/^(\d+)\s*[-–]\s*(\d+)$/);
         if (rangeMatch) {
@@ -238,7 +242,7 @@
                     value={wordRangeValue}
                     oninput={onWordRangeInput}
                     onblur={onWordRangeBlur}
-                    placeholder="np. 2–5 lub 5"
+                    placeholder="np. 2–5"
                     title="Wpisz zakres (np. 2–5), samą max. liczbę (np. 5) lub zostaw puste — bez limitu"
             />
             <span class="range-hint">puste = bez limitu</span>
@@ -250,7 +254,6 @@
             label={t('review.alternativeAnswers')}
             variant="alt"
             addPlaceholder={t('review.altAnswerPh')}
-            importPlaceholder="np. so loud outside that; (very) noisy outside so, so noisy outside so"
             chipVariant="ok"
             {onTouch}
     />
@@ -260,7 +263,6 @@
             label={t('review.exampleWrongAnswers')}
             variant="wrong"
             addPlaceholder={t('review.wrongAnswerPh')}
-            importPlaceholder="np. have lost touch with; lost touch; had lost contact with; lost contact to"
             chipVariant="err"
             {onTouch}
     />
@@ -357,10 +359,11 @@
         pointer-events: none;
     }
 
+    /* ── Bottom row: correct answer + word range ─────────────────────── */
     .bottom-row {
         display: flex;
         gap: var(--space-4);
-        align-items: flex-end;
+        align-items: flex-start; /* top-align so labels line up */
         flex-wrap: wrap;
     }
 
@@ -381,12 +384,11 @@
 
     .word-range-input {
         width: 96px;
-        text-align: center;
+        text-align: left;
     }
 
     .range-hint {
         font-size: var(--font-size-xs);
         color: var(--color-text-muted);
-        text-align: center;
     }
 </style>

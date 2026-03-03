@@ -5,7 +5,15 @@
 
     import type {PageData} from './$types.js';
     import {t} from '$lib/i18n.svelte.js';
-    import {ArrowClockwise, ArrowLeft, CheckFat, MedalMilitary, Trophy, WarningCircleIcon, XSquare} from 'phosphor-svelte';
+    import {
+        ArrowClockwise,
+        ArrowLeft,
+        CheckFat,
+        MedalMilitary,
+        Trophy,
+        WarningCircleIcon,
+        XSquare
+    } from 'phosphor-svelte';
 
     let {data} = $props<{ data: PageData }>();
 
@@ -86,17 +94,17 @@
                 <div class="a-header">
                     <span class="pos">{a.position}.</span>
                     <span class="badge" class:badge-ok={a.isCorrect} class:badge-err={!a.isCorrect}>
-            {#if a.isCorrect}
-              <CheckFat size={11} weight="bold"/> OK
-            {:else}
-              <XSquare size={11} weight="bold"/>
-            {/if}
-          </span>
+                        {#if a.isCorrect}
+                            <CheckFat size={11} weight="bold"/> OK
+                        {:else}
+                            <XSquare size={11} weight="bold"/>
+                        {/if}
+                    </span>
                     <span class="kw-tag">{a.keyword}</span>
                     {#if a.isKnownWrongAnswer}
-            <span class="known-wrong-badge">
-              <WarningCircleIcon size={11} weight="bold"/> {t('result.knownWrongAnswer')}
-            </span>
+                        <span class="known-wrong-badge">
+                            <WarningCircleIcon size={11} weight="bold"/> {t('result.knownWrongAnswer')}
+                        </span>
                     {/if}
                 </div>
 
@@ -110,6 +118,30 @@
                 >{a.given || t('result.noAnswer')}</span>{after}
                 </p>
 
+                {#if a.isCorrect && a.siblingVariants.length > 0}
+                    <!-- Show the optional-part variants the user didn't write -->
+                    <div class="also-accepted">
+                        <span class="corr-label">{t('result.alsoAccepted')}</span>
+                        <span class="alt-list">
+                            {#each a.siblingVariants as v}
+                                <span class="alt-chip alt-chip-sibling">{v}</span>
+                            {/each}
+                            {#each a.alternativeAnswers as alt}
+                                <span class="alt-chip">{alt}</span>
+                            {/each}
+                        </span>
+                    </div>
+                {:else if a.isCorrect && a.alternativeAnswers.length > 0}
+                    <div class="also-accepted">
+                        <span class="corr-label">{t('result.alsoAccepted')}</span>
+                        <span class="alt-list">
+                            {#each a.alternativeAnswers as alt}
+                                <span class="alt-chip">{alt}</span>
+                            {/each}
+                        </span>
+                    </div>
+                {/if}
+
                 {#if !a.isCorrect}
                     <div class="correction">
                         <span class="corr-label">{t('result.correct')}</span>
@@ -119,11 +151,10 @@
                         <div class="also-accepted">
                             <span class="corr-label">{t('result.alsoAccepted')}</span>
                             <span class="alt-list">
-                {#each a.alternativeAnswers as alt, i}
-                  <span class="alt-chip">{alt}</span>
-                    {#if i < a.alternativeAnswers.length - 1},{/if}
-                {/each}
-              </span>
+                                {#each a.alternativeAnswers as alt}
+                                    <span class="alt-chip">{alt}</span>
+                                {/each}
+                            </span>
                         </div>
                     {/if}
                 {/if}
@@ -332,6 +363,7 @@
         padding: var(--space-2) var(--space-3);
         background: var(--color-neutral-100);
         border-radius: var(--radius-md);
+        flex-wrap: wrap;
     }
 
     .corr-label {
@@ -359,6 +391,12 @@
         font-weight: var(--font-weight-semibold);
         padding: 2px var(--space-2);
         border-radius: var(--radius-full);
+    }
+
+    /* Sibling chips get a slightly different shade to hint they're "the same answer, different form" */
+    .alt-chip-sibling {
+        background: var(--color-primary-muted);
+        color: var(--color-primary);
     }
 
     /* ── Footer actions ───────────────────────────────────────────────── */

@@ -2,11 +2,7 @@ import type {PageServerLoad} from './$types.js';
 import {db} from '$lib/server/db.js';
 import {error} from '@sveltejs/kit';
 import type {AttemptResult} from '$lib/types.js';
-
-/** Normalise string the same way as the submit endpoint. */
-function normalise(s: string): string {
-    return s.toLowerCase().trim().replace(/\s+/g, ' ');
-}
+import {computeSiblings, normalise} from '$lib/answerUtils.js';
 
 export const load: PageServerLoad = ({params}) => {
     const attempt = db
@@ -59,8 +55,11 @@ export const load: PageServerLoad = ({params}) => {
         answers: rows.map((r) => {
             const altAnswers: string[] = JSON.parse(r.alternative_answers || '[]');
             const wrongAnswers: string[] = JSON.parse(r.example_wrong_answers || '[]');
-            const normGiven = normalise(r.given ?? '');
+            const given = r.given ?? '';
+            const normGiven = normalise(given);
             const isKnownWrong = !r.is_correct && wrongAnswers.some((w) => normalise(w) === normGiven);
+
+            const siblings = r.is_correct ? computeSiblings(given, r.correct_answer, altAnswers) : [];
 
             return {
                 questionId: r.question_id,
@@ -71,6 +70,7 @@ export const load: PageServerLoad = ({params}) => {
                 given: r.given,
                 correctAnswer: r.correct_answer,
                 alternativeAnswers: altAnswers,
+                siblingVariants: siblings,
                 isCorrect: r.is_correct === 1,
                 isKnownWrongAnswer: isKnownWrong,
             };

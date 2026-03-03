@@ -2,7 +2,7 @@
     import {t} from '$lib/i18n.svelte.js';
     import type {PageData} from './$types.js';
     import type {SetSummary} from '$lib/types.js';
-    import {ArrowRight, Camera, Link, MagnifyingGlass, PencilSimple, RocketLaunch, Upload} from 'phosphor-svelte';
+    import {ArrowRightIcon, CameraIcon, LinkIcon, MagnifyingGlassIcon, PencilSimpleIcon, RocketLaunchIcon, UploadIcon} from 'phosphor-svelte';
 
     let {data} = $props<{ data: PageData }>();
 
@@ -17,7 +17,7 @@
      *
      * @param slug - The set's slug.
      */
-    async function copyLink(slug: string) {
+    async function copyLinkIcon(slug: string) {
         const url = `${window.location.origin}/set/${slug}`;
         await navigator.clipboard.writeText(url);
         copiedSlug = slug;
@@ -42,14 +42,14 @@
         <div class="cta-row">
             <!-- Manual first (primary), scan second (ghost + beta) -->
             <a href="/create/manual" class="cta-card cta-primary">
-                <PencilSimple size={24} weight="duotone"/>
+                <PencilSimpleIcon size={24} weight="duotone"/>
                 <div>
                     <strong>{t('home.manualTitle')}</strong>
                     <span>{t('home.manualDesc')}</span>
                 </div>
             </a>
             <a href="/create/scan" class="cta-card cta-ghost">
-                <Camera size={24} weight="duotone"/>
+                <CameraIcon size={24} weight="duotone"/>
                 <div>
                     <strong>
                         {t('home.scanTitle')}
@@ -82,18 +82,18 @@
                         <div class="set-actions">
                             <a href="/set/{s.slug}" class="solve-link">
                                 {t('home.solveNow')}
-                                <ArrowRight size={14} weight="bold"/>
+                                <ArrowRightIcon size={14} weight="bold"/>
                             </a>
                             <button
                                     class="copy-btn"
-                                    onclick={() => copyLink(s.slug)}
+                                    onclick={() => copyLinkIcon(s.slug)}
                                     title="Skopiuj link do udostępnienia"
                                     aria-label="Skopiuj link do zestawu {s.title}"
                             >
                                 {#if copiedSlug === s.slug}
                                     <span class="copied-label">Skopiowano!</span>
                                 {:else}
-                                    <Link size={14} weight="bold"/>
+                                    <LinkIcon size={14} weight="bold"/>
                                 {/if}
                             </button>
                         </div>
@@ -109,7 +109,7 @@
         <div class="steps">
             <div class="step card">
                 <div class="step-icon">
-                    <Upload size={22} weight="duotone"/>
+                    <UploadIcon size={22} weight="duotone"/>
                 </div>
                 <div class="step-num">1</div>
                 <strong>{t('home.step1')}</strong>
@@ -118,7 +118,7 @@
             <div class="step-arrow">→</div>
             <div class="step card">
                 <div class="step-icon">
-                    <MagnifyingGlass size={22} weight="duotone"/>
+                    <MagnifyingGlassIcon size={22} weight="duotone"/>
                 </div>
                 <div class="step-num">2</div>
                 <strong>{t('home.step2')}</strong>
@@ -127,7 +127,7 @@
             <div class="step-arrow">→</div>
             <div class="step card">
                 <div class="step-icon">
-                    <RocketLaunch size={22} weight="duotone"/>
+                    <RocketLaunchIcon size={22} weight="duotone"/>
                 </div>
                 <div class="step-num">3</div>
                 <strong>{t('home.step3')}</strong>

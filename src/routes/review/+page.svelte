@@ -4,7 +4,7 @@
     import {t} from '$lib/i18n.svelte.js';
     import type {ParsedKWTQuestion} from '$lib/types.js';
     import KwtQuestionEditor from '$lib/components/KwtQuestionEditor.svelte';
-    import {Plus, RocketLaunch} from 'phosphor-svelte';
+    import {PlusIcon, RocketLaunchIcon} from 'phosphor-svelte';
 
     const GAP = '______';
 
@@ -143,7 +143,7 @@
             {#if isPublishing}
                 <span class="spinner"></span> {t('review.publishing')}
             {:else}
-                <RocketLaunch size={18} weight="regular"/> {t('review.publish')}
+                <RocketLaunchIcon size={18} weight="regular"/> {t('review.publish')}
             {/if}
         </button>
     </div>
@@ -188,7 +188,7 @@
     </div>
 
     <button class="btn-ghost add-btn" onclick={addQuestion}>
-        <Plus size={16} weight="bold"/> {t('review.addQuestion')}
+        <PlusIcon size={16} weight="bold"/> {t('review.addQuestion')}
     </button>
 </div>
 

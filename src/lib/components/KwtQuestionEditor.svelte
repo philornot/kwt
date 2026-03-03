@@ -6,7 +6,7 @@
 
     import {t} from '$lib/i18n.svelte.js';
     import type {ParsedKWTQuestion} from '$lib/types.js';
-    import {Plus, WarningCircle, XSquare} from 'phosphor-svelte';
+    import {PlusIcon, WarningCircleIcon, XSquare} from 'phosphor-svelte';
     import {CANONICAL_GAP} from '$lib/constants.js';
 
     interface Props {
@@ -137,7 +137,7 @@
         <span class="q-num">{t('review.questionNum', {n: index + 1})}</span>
         {#if error}
       <span class="q-err">
-        <WarningCircle size={13} weight="bold"/> {error}
+        <WarningCircleIcon size={13} weight="bold"/> {error}
       </span>
         {/if}
         <button
@@ -248,7 +248,7 @@
                     onblur={() => onTouch?.()}
             />
             <button type="button" class="btn-ghost add-chip-btn" onclick={addAltAnswer}>
-                <Plus size={13} weight="bold"/> {t('review.addAnswerBtn')}
+                <PlusIcon size={13} weight="bold"/> {t('review.addAnswerBtn')}
             </button>
         </div>
     </div>
@@ -281,7 +281,7 @@
                     onblur={() => onTouch?.()}
             />
             <button type="button" class="btn-ghost add-chip-btn" onclick={addWrongAnswer}>
-                <Plus size={13} weight="bold"/> {t('review.addAnswerBtn')}
+                <PlusIcon size={13} weight="bold"/> {t('review.addAnswerBtn')}
             </button>
         </div>
     </div>

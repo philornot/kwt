@@ -19,7 +19,7 @@
     import KwtQuestionEditor from '$lib/components/KwtQuestionEditor.svelte';
     import type {KWTQuestion, ParsedKWTQuestion} from '$lib/types.js';
     import type {PageData} from './$types.js';
-    import {CircleNotch, FloppyDisk, Plus, RocketLaunch} from 'phosphor-svelte';
+    import {CircleNotchIcon, FloppyDiskIcon, PlusIcon, RocketLaunchIcon} from 'phosphor-svelte';
 
     interface DraftQuestion extends ParsedKWTQuestion {
         _key: number;
@@ -153,7 +153,7 @@
                 return;
             }
 
-            goto(`/set/${body.slug}`);
+            await goto(`/set/${body.slug}`);
         } catch (err) {
             errorMessage = err instanceof Error ? err.message : 'Unknown error.';
         } finally {
@@ -183,13 +183,13 @@
         </div>
         <button class="btn-primary save-btn" disabled={isSaving} onclick={save}>
             {#if isSaving}
-                <CircleNotch size={18} weight="bold" class="spin"/>
+                <CircleNotchIcon size={18} weight="bold" class="spin"/>
                 Zapisywanie…
             {:else if isAdmin}
-                <FloppyDisk size={18} weight="regular"/>
+                <FloppyDiskIcon size={18} weight="regular"/>
                 Zapisz zestaw
             {:else}
-                <RocketLaunch size={18} weight="regular"/>
+                <RocketLaunchIcon size={18} weight="regular"/>
                 Zapisz kopię
             {/if}
         </button>
@@ -235,7 +235,7 @@
     </div>
 
     <button class="btn-ghost add-btn" onclick={addQuestion}>
-        <Plus size={16} weight="bold"/> {t('review.addQuestion')}
+        <PlusIcon size={16} weight="bold"/> {t('review.addQuestion')}
     </button>
 </div>
 

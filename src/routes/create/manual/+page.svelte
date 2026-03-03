@@ -3,7 +3,7 @@
     import {t} from '$lib/i18n.svelte.js';
     import KwtQuestionEditor from '$lib/components/KwtQuestionEditor.svelte';
     import type {ParsedKWTQuestion} from '$lib/types.js';
-    import {CircleNotch, Plus, RocketLaunch} from 'phosphor-svelte';
+    import {CircleNotchIcon, PlusIcon, RocketLaunchIcon} from 'phosphor-svelte';
 
     interface DraftQuestion extends ParsedKWTQuestion {
         _key: number;
@@ -120,7 +120,7 @@
                 return;
             }
 
-            goto(`/set/${data.slug}`);
+            await goto(`/set/${data.slug}`);
         } catch (err) {
             errorMessage = err instanceof Error ? err.message : 'Unknown error.';
         } finally {
@@ -141,9 +141,9 @@
         </div>
         <button class="btn-primary pub-btn" disabled={isPublishing} onclick={publish}>
             {#if isPublishing}
-                <CircleNotch size={18} weight="bold" class="spin"/> {t('manual.publishing')}
+                <CircleNotchIcon size={18} weight="bold" class="spin"/> {t('manual.publishing')}
             {:else}
-                <RocketLaunch size={18} weight="regular"/> {t('manual.publish')}
+                <RocketLaunchIcon size={18} weight="regular"/> {t('manual.publish')}
             {/if}
         </button>
     </div>
@@ -192,7 +192,7 @@
     {/if}
 
     <button class="btn-ghost add-btn" onclick={addQuestion}>
-        <Plus size={16} weight="bold"/> {t('manual.addQuestion')}
+        <PlusIcon size={16} weight="bold"/> {t('manual.addQuestion')}
     </button>
 </div>
 

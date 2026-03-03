@@ -5,7 +5,7 @@
 
     import type {PageData} from './$types.js';
     import {t} from '$lib/i18n.svelte.js';
-    import {ArrowClockwise, ArrowLeft, CheckFat, MedalMilitary, Trophy, WarningCircle, XSquare} from 'phosphor-svelte';
+    import {ArrowClockwise, ArrowLeft, CheckFat, MedalMilitary, Trophy, WarningCircleIcon, XSquare} from 'phosphor-svelte';
 
     let {data} = $props<{ data: PageData }>();
 
@@ -95,7 +95,7 @@
                     <span class="kw-tag">{a.keyword}</span>
                     {#if a.isKnownWrongAnswer}
             <span class="known-wrong-badge">
-              <WarningCircle size={11} weight="bold"/> {t('result.knownWrongAnswer')}
+              <WarningCircleIcon size={11} weight="bold"/> {t('result.knownWrongAnswer')}
             </span>
                     {/if}
                 </div>

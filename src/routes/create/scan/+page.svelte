@@ -12,7 +12,15 @@
     import {reviewState} from '$lib/store.svelte.js';
     import {t} from '$lib/i18n.svelte.js';
     import type {UploadResponse} from '$lib/types.js';
-    import {CircleNotch, CloudArrowUp, FilePdf, Image, MagnifyingGlass, WarningCircle, X,} from 'phosphor-svelte';
+    import {
+        CircleNotchIcon,
+        CloudArrowUpIcon,
+        FilePdfIcon,
+        ImageIcon,
+        MagnifyingGlassIcon,
+        WarningCircleIcon,
+        XIcon,
+    } from 'phosphor-svelte';
 
     const MAX_MB = 20;
     const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -115,7 +123,7 @@
             reviewState.questions = data.questions;
             reviewState.rawText = data.rawText;
             reviewState.title = selectedFile.name.replace(/\.[^.]+$/, '');
-            goto('/review');
+            await goto('/review');
 
         } catch (err) {
             errorMessage = err instanceof Error ? err.message : 'Nieznany błąd. Spróbuj ponownie.';
@@ -149,9 +157,9 @@
             <div class="file-preview">
         <span class="file-icon">
           {#if selectedFile.type === 'application/pdf'}
-            <FilePdf size={36} weight="duotone"/>
+            <FilePdfIcon size={36} weight="duotone"/>
           {:else}
-            <Image size={36} weight="duotone"/>
+            <ImageIcon size={36} weight="duotone"/>
           {/if}
         </span>
                 <div class="file-info">
@@ -163,12 +171,12 @@
                         onclick={() => { selectedFile = null; errorMessage = ''; }}
                         aria-label={t('scan.removeFile')}
                 >
-                    <X size={14} weight="bold"/>
+                    <XIcon size={14} weight="bold"/>
                 </button>
             </div>
         {:else}
             <div class="drop-hint">
-                <CloudArrowUp size={48} weight="light" class="drop-icon"/>
+                <CloudArrowUpIcon size={48} weight="light" class="drop-icon"/>
                 <p><strong>{t('scan.dropHint')}</strong></p>
                 <p class="or">{t('scan.or')}</p>
                 <label class="pick-btn btn-primary" for="fi">{t('scan.browse')}</label>
@@ -179,7 +187,7 @@
 
     {#if errorMessage}
         <div class="error-banner" role="alert">
-            <WarningCircle size={16} weight="bold" class="err-icon"/>
+            <WarningCircleIcon size={16} weight="bold" class="err-icon"/>
             <span>{errorMessage}</span>
         </div>
     {/if}
@@ -191,9 +199,9 @@
                 onclick={process}
         >
             {#if isProcessing}
-                <CircleNotch size={18} weight="bold" class="spin"/> {t('scan.processing')}
+                <CircleNotchIcon size={18} weight="bold" class="spin"/> {t('scan.processing')}
             {:else}
-                <MagnifyingGlass size={18} weight="regular"/> {t('scan.process')}
+                <MagnifyingGlassIcon size={18} weight="regular"/> {t('scan.process')}
             {/if}
         </button>
     </div>

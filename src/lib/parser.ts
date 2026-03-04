@@ -4,13 +4,13 @@
  * Exports a single public entry point `parseQuestions(rawText, type)` that
  * dispatches to the correct internal parser based on exercise type:
  *
- *   'kwt'         → `parseKwtBlock`   — expects a standalone keyword line
- *                                        between sentence1 and sentence2.
+ *   'kwt'         → `parseKwtBlock`  — expects a standalone keyword line
+ *                                      between sentence1 and sentence2.
  *   'grammar'
- *   'translation' → `parseGapBlock`   — each numbered block is a single gapped
- *                                        sentence; no sentence1 or keyword.
+ *   'translation' → `parseGapBlock`  — each numbered block is a single gapped
+ *                                      sentence; no sentence1 or keyword.
  *
- * Both parsers share the same block-splitting logic and OCR post-processing.
+ * Both parsers share the same block-splitting and OCR post-processing logic.
  * This module contains no Node.js imports and is safe to use in browser context.
  */
 
@@ -46,12 +46,21 @@ const KEYWORD_RE = /^[A-Za-z]{2,20}$/;
  */
 const GAP_RE = /_{3,}|—{2,}|-{4,}|\.{5,}/g;
 
+/**
+ * Lines that consist almost entirely of short tokens typical of OCR noise
+ * from rotated sidebar labels (e.g. "Matura rozszerzona: Gramatykalizacja").
+ * Heuristic: line with ≤ 4 words where every word is ≤ 4 characters OR the
+ * line matches a known sidebar pattern.
+ */
+const SIDEBAR_NOISE_RE = /^(?:[A-ZŁŚŻŹ][a-złśżź]{0,3}\s*){1,5}$|Matura|rozszerzona|rozszerzony|podstawowa|podstawowy/i;
+
 // ---------------------------------------------------------------------------
 // OCR post-processing
 // ---------------------------------------------------------------------------
 
 /** Common single-character substitution errors produced by Tesseract. */
-const CHAR_FIXES: Array<[RegExp, string]> = [[/(?<!\w)\|(?!\w)/g, 'I'],];
+const CHAR_FIXES: Array<[RegExp, string]> = [[/(?<!\w)\|(?!\w)/g, 'I'], // Tesseract sometimes renders underscores as hyphens when the line is short
+    [/^[-]{4,}$/, CANONICAL_GAP],];
 
 /**
  * Cleans up common Tesseract character-recognition errors in raw OCR text.
@@ -75,7 +84,7 @@ function fixOcrArtefacts(text: string): string {
  * Parses raw OCR text or pasted plain text into exercise question drafts.
  *
  * Dispatches to the appropriate internal parser based on `type`:
- *  - 'kwt'                    → {@link parseKwtBlock}
+ *  - 'kwt'                     → {@link parseKwtBlock}
  *  - 'grammar' | 'translation' → {@link parseGapBlock}
  *
  * Safe to call in browser context (no Node.js APIs used).
@@ -89,7 +98,8 @@ export function parseQuestions(rawText: string, type: ExerciseType = 'kwt',): Pa
     const lines = cleaned
         .split('\n')
         .map((l) => l.trim())
-        .filter((l) => l.length > 0);
+        .filter((l) => l.length > 0)
+        .filter((l) => !isSidebarNoise(l));
 
     const blocks = splitIntoBlocks(lines);
     const parseBlock = type === 'kwt' ? parseKwtBlock : parseGapBlock;
@@ -97,6 +107,29 @@ export function parseQuestions(rawText: string, type: ExerciseType = 'kwt',): Pa
     return blocks
         .map(parseBlock)
         .filter((q) => q.sentence2WithGap.trim().length > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Noise filtering
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when a line is likely OCR noise from a rotated sidebar label
+ * rather than exercise content.
+ *
+ * Heuristics applied (any match → noise):
+ *  1. Known sidebar keywords (Matura, rozszerzona, etc.)
+ *  2. Line is ≤ 5 tokens and every token is ≤ 3 characters — typical of
+ *     Tesseract breaking up vertical text into single letters / short chunks.
+ *
+ * @param line - Trimmed, non-empty line from the OCR output.
+ * @returns True when the line should be discarded.
+ */
+function isSidebarNoise(line: string): boolean {
+    if (SIDEBAR_NOISE_RE.test(line)) return true;
+    const tokens = line.split(/\s+/);
+    if (tokens.length <= 5 && tokens.every((tok) => tok.length <= 3)) return true;
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +178,6 @@ function splitIntoBlocks(lines: string[]): string[][] {
 function parseKwtBlock(block: string[]): ParsedKWTQuestion {
     const firstMatch = block[0].match(QUESTION_START_RE);
     const afterNumber = firstMatch ? firstMatch[2].trim() : block[0];
-
     const allLines = [afterNumber, ...block.slice(1)].filter((l) => l.length > 0);
 
     const kwIdx = allLines.findIndex((l) => KEYWORD_RE.test(l));
@@ -187,9 +219,17 @@ function parseKwtBlock(block: string[]): ParsedKWTQuestion {
 /**
  * Converts one block of lines into a grammar/translation {@link ParsedKWTQuestion}.
  *
- * The entire block (minus the question number prefix) becomes sentence2WithGap.
- * sentence1 and keyword are left empty — the hint is embedded in the sentence
- * itself as a parenthesised segment, e.g. `(he / complete)` or `(z pewnością)`.
+ * The matura grammar format typically has TWO printed gap lines per exercise:
+ *
+ *   9.2. He got soaked in the rain. He should (take / umbrella) ______
+ *   ______ before he set off.
+ *
+ * Both underline lines belong to a single fill-in answer. After joining lines
+ * we collapse any run of multiple consecutive `______` markers into one so the
+ * editor shows a single gap input.
+ *
+ * sentence1 and keyword are left empty — the hint lives inside the sentence
+ * as a parenthesised segment, e.g. `(take / umbrella)` or `(z pewnością)`.
  *
  * @param block - Lines belonging to one numbered question.
  * @returns Parsed gap question draft.
@@ -197,14 +237,48 @@ function parseKwtBlock(block: string[]): ParsedKWTQuestion {
 function parseGapBlock(block: string[]): ParsedKWTQuestion {
     const firstMatch = block[0].match(QUESTION_START_RE);
     const afterNumber = firstMatch ? firstMatch[2].trim() : block[0];
-
     const allLines = [afterNumber, ...block.slice(1)].filter((l) => l.length > 0);
-    const rawS2 = allLines.join(' ').trim();
+
+    // Separate pure-gap lines (entire line is a gap marker) from content lines.
+    // Pure-gap lines are continuations of the same answer blank and should not
+    // generate a second `______` in the output.
+    const contentLines: string[] = [];
+    let trailingGapLine: string | null = null;
+
+    for (const line of allLines) {
+        const normalised = line.replace(GAP_RE, CANONICAL_GAP).trim();
+        // A pure-gap line is one that, after normalisation, is only `______`
+        // (possibly with leading/trailing spaces). These represent the second
+        // printed underline of a two-line answer blank.
+        if (normalised === CANONICAL_GAP) {
+            trailingGapLine = normalised;
+        } else {
+            contentLines.push(line);
+        }
+    }
+
+    let rawS2 = contentLines.join(' ').trim();
+
+    // If the sentence already contains a gap marker, the trailing gap line is
+    // a continuation blank — discard it (one gap is enough).
+    // If there is NO gap in the content yet, append the trailing gap line so
+    // the sentence ends with `______`.
+    if (trailingGapLine && !GAP_RE.test(rawS2)) {
+        rawS2 = rawS2 + ' ' + trailingGapLine;
+    }
+
+    // Reset lastIndex after the stateful regex test above.
+    GAP_RE.lastIndex = 0;
+
     const sentence2WithGap = normaliseGap(rawS2);
 
+    // Collapse consecutive gap markers into one:
+    // "______ ______" → "______"
+    const collapsed = sentence2WithGap.replace(new RegExp(`(${CANONICAL_GAP})(\\s*){2,}`, 'g'), CANONICAL_GAP,);
+
     return {
-        sentence1: '',
-        sentence2WithGap,
+        sentence1: '', // Ensure there is a space between the gap marker and the following word.
+        sentence2WithGap: collapsed.replace(/(______)([^ ])/g, '$1 $2'),
         keyword: '',
         correctAnswer: null,
         alternativeAnswers: [],
@@ -223,11 +297,16 @@ function parseGapBlock(block: string[]): ParsedKWTQuestion {
  * If no gap marker is found, inserts a fallback gap at a heuristic position.
  *
  * @param raw - Raw sentence string, possibly containing OCR gap artefacts.
- * @returns Sentence with exactly one canonical `______` gap.
+ * @returns Sentence with canonical `______` gap(s).
  */
 function normaliseGap(raw: string): string {
+    // Reset stateful regex before use.
+    GAP_RE.lastIndex = 0;
     if (!raw) return '';
-    if (GAP_RE.test(raw)) return raw.replace(GAP_RE, CANONICAL_GAP).trim();
+    if (GAP_RE.test(raw)) {
+        GAP_RE.lastIndex = 0;
+        return raw.replace(GAP_RE, CANONICAL_GAP).trim();
+    }
     return insertFallbackGap(raw);
 }
 

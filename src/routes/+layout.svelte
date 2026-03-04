@@ -4,8 +4,15 @@
     import {locale, t} from '$lib/i18n.svelte.js';
     import {mode} from '$lib/mode.svelte.js';
     import {Camera, PencilSimple, SignOut, Translate} from 'phosphor-svelte';
+    import {page} from '$app/stores';
     import type {ExerciseType} from '$lib/constants.js';
     import {EXERCISE_TYPES} from '$lib/constants.js';
+
+    /** Hide mode tabs on test-taking and result pages — switching mode there is irrelevant. */
+    const showModeTabs = $derived(
+        !$page.url.pathname.startsWith('/set/') &&
+        !$page.url.pathname.startsWith('/result/'),
+    );
 
     let {children, data} = $props();
 
@@ -35,18 +42,20 @@
         <a href="/" class="logo">{t('nav.home')}</a>
 
         <nav class="nav">
-            <!-- Mode tabs — change global state, no navigation -->
-            <div class="type-group" role="group" aria-label="Tryb ćwiczenia">
-                {#each EXERCISE_TYPES as type}
-                    <button
-                            class="type-tab"
-                            class:active={mode.type === type}
-                            aria-pressed={mode.type === type}
-                            onclick={() => setMode(type)}
-                            type="button"
-                    >{typeLabels[type]}</button>
-                {/each}
-            </div>
+            <!-- Mode tabs — hidden on test-taking and result pages -->
+            {#if showModeTabs}
+                <div class="type-group" role="group" aria-label="Tryb ćwiczenia">
+                    {#each EXERCISE_TYPES as type}
+                        <button
+                                class="type-tab"
+                                class:active={mode.type === type}
+                                aria-pressed={mode.type === type}
+                                onclick={() => setMode(type)}
+                                type="button"
+                        >{typeLabels[type]}</button>
+                    {/each}
+                </div>
+            {/if}
 
             <!-- Action buttons — navigate using current mode -->
             <a href="/create/scan" class="nav-link">

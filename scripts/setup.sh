@@ -81,7 +81,7 @@ echo ""
 info "Filling in deploy.config.yaml — press Enter to keep the current value."
 echo ""
 
-SSH_ALIAS=$(prompt "remote.ssh_alias"   "SSH alias (e.g. frpi4 or pi@192.168.1.10)")
+SSH_ALIAS=$(prompt "remote.ssh_alias"   "SSH alias (e.g. rpi or pi@192.168.1.10)")
 DEPLOY_PATH=$(prompt "remote.deploy_path" "Remote deploy directory")
 DATA_PATH=$(prompt  "remote.data_path"  "Remote data directory (database lives here)")
 PORT=$(prompt       "app.port"           "Application port")
